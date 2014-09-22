@@ -112,11 +112,11 @@ grab(FILE *fd)
 			min##c = (*p)->c;			\
 	} while (0)
 
-	printf("Read Vectors\n");
+	warnx("Read Vectors");
 
 	while (fread(&head, sizeof(head), 1, fd) > 0) {
 		if (memcmp(head.magic, "ILDA", sizeof(head.magic)))
-			errx(-1, "miss magic");
+			errx(-1, "bad magic");
 
 		*pilda = calloc(1, sizeof(*ilda));
 		assert(*pilda);
@@ -128,7 +128,7 @@ grab(FILE *fd)
 		n = ntohs(head.npoints);
 
 		switch (head.format) {
-		case 0:
+		case 0:		/* 3D Coordinates */
 			for (i = 0; i < n; i++) {
 				fread(&tri, sizeof(tri), 1, fd);
 				*pcoord = calloc(1, sizeof(*coord));
@@ -144,20 +144,21 @@ grab(FILE *fd)
 				pcoord = &(*pcoord)->next;
 			}
 			break;
-		case 1:
+		case 1:		/* 2D Coordinates */
 			for (i = 0; i < n; i++) {
 				fread(&two, sizeof(two), 1, fd);
 				*pcoord = calloc(1, sizeof(*coord));
 				assert(*pcoord);
-				(*pcoord)->x = C(tri.x);
+				(*pcoord)->x = C(two.x);
 				R(pcoord, x);
-				(*pcoord)->y = C(tri.y);
+				(*pcoord)->y = C(two.y);
 				R(pcoord, y);
-				(*pcoord)->on = tri.state;
+				(*pcoord)->on = two.state;
+				(*pcoord)->color = two.color;
 				pcoord = &(*pcoord)->next;
 			}
 			break;
-		case 2:
+		case 2:		/* Color Index Palette */
 			for (i = 0; i < head.npoints; i++) {
 				fread(&color, sizeof(color), 1, fd);
 				/* do nothing, just read ahead */
@@ -179,7 +180,7 @@ grab(FILE *fd)
 			p->c = (p->c - min##c) * (m - 1) / r;	\
 	} while (0)
 
-	printf("Normalize Points\n");
+	warnx("Normalize Points");
 
 	for (il = ilda; il; il = il->next) {
 		for (c = il->coord; c; c = c->next) {
@@ -189,7 +190,7 @@ grab(FILE *fd)
 		}
 	}
 #undef N
-	printf("Ready to Play\n");
+	warnx("Ready to Play");
 
 	return ilda;
 }
@@ -267,8 +268,8 @@ main(int argc, char **argv)
 	inittek();
 	for (i = ilda; !dflag && i; i = i->next) {
 		page();
-		on = 0;		/* first vector is always blank */
-		for (c = i->coord; c; c = c->next) {
+		/* first vector is always blank */
+		for (on = 0, c = i->coord; c; c = c->next) {
 			iplot(on, c->x, c->y);
 			on = !c->color;
 		}
